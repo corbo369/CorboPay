@@ -1,1 +1,2 @@
 # CorboPay
+CorboPay is a work in progress secure payment escrow for freelance developers. It's funcitonality will give clients the ability to submit a draft based on quotes and once that draft is approved by the contract owner it can be finalized by the client. Payment is then locked but split into milestones set in the draft. Once each milestone is reached the client can release the payment to the developer.
