@@ -79,28 +79,73 @@ pragma solidity ^0.8.7;
 
 contract CorboPay is Ownable {
 
-    uint256 index = 0;
+    uint256 submittedIndex;
+
+    uint256 index;
 
     struct Draft {
+        bool signed;
         address signer;
         uint256 milestonesAmount;
         uint256 milestonesCount;
+        uint256 totalAmount;
+        uint256 ethTotal;
     }
     
     mapping (address => bool) client;
 
-    mapping (uint256 => Draft) drafts;
+    mapping (address => bool) approvedClient;
+
+    mapping (uint256 => Draft) submittedDrafts;
+
+    mapping (uint256 => Draft) approvedDrafts;
 
     modifier onlyClient() {
         require(client[msg.sender] == true);
         _;
     }
 
-    function submitDraft(uint256 amount, uint256 numMilestones) public onlyClient {
-        uint256 costPerMilestone = amount / numMilestones;
-        
-        drafts[index].signer = msg.sender;
-        drafts[index].milestonesAmount = numMilestones;
-        drafts[index].milestonesCount = costPerMilestone;
+    modifier onlyApproved() {
+        require(client[msg.sender] == true);
+        _;
     }
+
+    function verifyDraft(uint256 _index, uint256 _amount) internal {
+        approvedDrafts[index].signer = submittedDrafts[_index].signer;
+        approvedDrafts[index].milestonesAmount = submittedDrafts[_index].milestonesAmount;
+        approvedDrafts[index].milestonesCount = submittedDrafts[_index].milestonesCount;
+        approvedDrafts[index].totalAmount = submittedDrafts[_index].totalAmount;
+        approvedDrafts[index].ethTotal = _amount;
+        index++;
+    }
+
+    function submitDraft(uint256 amount, uint256 numMilestones) public onlyClient {
+        submittedDrafts[submittedIndex].signer = msg.sender;
+        submittedDrafts[submittedIndex].milestonesAmount = amount / numMilestones;
+        submittedDrafts[submittedIndex].milestonesCount = numMilestones;
+        submittedDrafts[submittedIndex].totalAmount = amount;
+        submittedIndex++;
+    }
+
+    function finalizeDraft(uint256 clientIndex) public onlyClient payable {
+        require(msg.value * 100 == approvedDrafts[clientIndex].ethTotal);
+        approvedClient[msg.sender] = true;
+    }
+
+    function approveDraft(uint256 oldIndex, address submitter, uint256 amount) public onlyOwner {
+        require(submittedDrafts[oldIndex].signer == submitter);
+        submittedDrafts[oldIndex].signed = true;
+        verifyDraft(oldIndex, amount);
+    }
+
+    function viewSubmitted(uint256 clientIndex) public view onlyClient returns(Draft memory) {
+        require(submittedDrafts[clientIndex].signer == msg.sender);
+        return submittedDrafts[clientIndex];
+    }
+
+    function viewApproved(uint256 clientIndex) public view onlyApproved returns(Draft memory) {
+        require(approvedDrafts[clientIndex].signer == msg.sender);
+        return approvedDrafts[clientIndex];
+    }
+
 }
