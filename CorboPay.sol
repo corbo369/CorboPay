@@ -101,12 +101,12 @@ contract CorboPay is Ownable {
     mapping (uint256 => Draft) approvedDrafts;
 
     modifier onlyClient() {
-        require(client[msg.sender] == true);
+        require(client[msg.sender] == true || msg.sender == owner());
         _;
     }
 
     modifier onlyApproved() {
-        require(client[msg.sender] == true);
+        require(client[msg.sender] == true || msg.sender == owner());
         _;
     }
 
@@ -129,6 +129,7 @@ contract CorboPay is Ownable {
 
     function finalizeDraft(uint256 clientIndex) public onlyClient payable {
         require(msg.value * 100 == approvedDrafts[clientIndex].ethTotal);
+        approvedDrafts[clientIndex].signed = true;
         approvedClient[msg.sender] = true;
     }
 
@@ -147,5 +148,4 @@ contract CorboPay is Ownable {
         require(approvedDrafts[clientIndex].signer == msg.sender);
         return approvedDrafts[clientIndex];
     }
-
 }
