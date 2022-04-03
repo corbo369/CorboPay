@@ -77,19 +77,30 @@ abstract contract Ownable is Context {
 
 pragma solidity ^0.8.7;
 
+/**
+* @dev Contract which provides a secure payment service through a middle-man free
+* deposits. Contract owner and client both must approve the terms of the payment 
+* before the payment is deposited. Once deposited it is locked in the contract until
+* the depositer realeases at milestones set in the terms of the payment.
+*/
 contract CorboPay is Ownable {
 
+    //Index of submitted drafts.
     uint256 submittedIndex;
 
+    //Index of approved drafts.
     uint256 index;
+
+    //Number of approved drafts that are not yet completed.
+    uint256 liveCount;
 
     struct Draft {
         bool signed;
+        bool complete;
         address signer;
         uint256 milestonesAmount;
         uint256 milestonesCount;
         uint256 totalAmount;
-        uint256 ethTotal;
     }
     
     mapping (address => bool) client;
@@ -100,26 +111,46 @@ contract CorboPay is Ownable {
 
     mapping (uint256 => Draft) approvedDrafts;
 
+    /**
+     * @dev Throws if called by anyone except the contract owner or a potential/approved
+     * client added by the owner.
+     */
     modifier onlyClient() {
-        require(client[msg.sender] == true || msg.sender == owner());
+        require(client[msg.sender] == true || approvedClient[msg.sender] == true || msg.sender == owner());
         _;
     }
 
+    /**
+     * @dev Throws if called by anyone except the contract owner or an approved
+     * client added by the owner.
+     */
     modifier onlyApproved() {
         require(client[msg.sender] == true || msg.sender == owner());
         _;
     }
 
-    function verifyDraft(uint256 _index, uint256 _amount) internal {
+    /**
+     * @dev Turns a submitted draft into a verified draft stored at (`_index`) as well as 
+     * locking the ether value stored in {Draft.totalAmount} at the time of verification.
+     */
+    function verifyDraft(uint256 _index) internal {
         approvedDrafts[index].signer = submittedDrafts[_index].signer;
         approvedDrafts[index].milestonesAmount = submittedDrafts[_index].milestonesAmount;
         approvedDrafts[index].milestonesCount = submittedDrafts[_index].milestonesCount;
         approvedDrafts[index].totalAmount = submittedDrafts[_index].totalAmount;
-        approvedDrafts[index].ethTotal = _amount;
         index++;
     }
 
+    /**
+     * @dev Clients can call this function to submit a draft of payment terms with paramaters
+     * (`amount`) referring to the total amount of the payment and (`numMilestones`) referrring
+     * to the number of payment milestones requested.
+     *
+     * If the client would like no milestones and the total payment released all at once use the 
+     * value '1' for (`numMilestones`), function will throw if the value is '0'.
+     */
     function submitDraft(uint256 amount, uint256 numMilestones) public onlyClient {
+        require(numMilestones > 0);
         submittedDrafts[submittedIndex].signer = msg.sender;
         submittedDrafts[submittedIndex].milestonesAmount = amount / numMilestones;
         submittedDrafts[submittedIndex].milestonesCount = numMilestones;
@@ -127,25 +158,56 @@ contract CorboPay is Ownable {
         submittedIndex++;
     }
 
+    /**
+     * @dev 
+     */
     function finalizeDraft(uint256 clientIndex) public onlyClient payable {
-        require(msg.value * 100 == approvedDrafts[clientIndex].ethTotal);
+        require(msg.value * 100 == approvedDrafts[clientIndex].totalAmount);
         approvedDrafts[clientIndex].signed = true;
         approvedClient[msg.sender] = true;
+        liveCount++;
     }
 
-    function approveDraft(uint256 oldIndex, address submitter, uint256 amount) public onlyOwner {
-        require(submittedDrafts[oldIndex].signer == submitter);
-        submittedDrafts[oldIndex].signed = true;
-        verifyDraft(oldIndex, amount);
-    }
-
+    /**
+     * @dev 
+     */
     function viewSubmitted(uint256 clientIndex) public view onlyClient returns(Draft memory) {
         require(submittedDrafts[clientIndex].signer == msg.sender);
         return submittedDrafts[clientIndex];
     }
 
+    /**
+     * @dev 
+     */
     function viewApproved(uint256 clientIndex) public view onlyApproved returns(Draft memory) {
         require(approvedDrafts[clientIndex].signer == msg.sender);
         return approvedDrafts[clientIndex];
+    }
+
+    /**
+     * @dev 
+     */
+    function completeMilestone(uint256 clientIndex) public payable onlyApproved {
+        require(approvedDrafts[clientIndex].signer == msg.sender);
+        uint256 count = approvedDrafts[clientIndex].milestonesCount;
+        (bool success, ) = msg.sender.call{value: address(this).balance / liveCount / count}("");
+        require(success, "Transfer failed.");
+    }
+
+    /**
+     * @dev 
+     */
+    function approveDraft(uint256 oldIndex, address submitter) public onlyOwner {
+        require(submittedDrafts[oldIndex].signer == submitter);
+        submittedDrafts[oldIndex].signed = true;
+        verifyDraft(oldIndex);
+    }
+    
+    /**
+     * @dev 
+     */
+    function completeDraft(uint256 clientIndex) public onlyOwner {
+        approvedDrafts[clientIndex].complete = true;
+        liveCount--;
     }
 }
