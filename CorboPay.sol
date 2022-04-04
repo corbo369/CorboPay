@@ -1,9 +1,31 @@
 // SPDX-License-Identifier: MIT
-// OpenZeppelin Contracts v4.4.1 (access/Ownable.sol)
+// OpenZeppelin Contracts v4.4.1 (utils/Context.sol)
 
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/utils/Context.sol";
+/**
+ * @dev Provides information about the current execution context, including the
+ * sender of the transaction and its data. While these are generally available
+ * via msg.sender and msg.data, they should not be accessed in such a direct
+ * manner, since when dealing with meta-transactions the account sending and
+ * paying for execution may not be the actual sender (as far as an application
+ * is concerned).
+ *
+ * This contract is only required for intermediate, library-like contracts.
+ */
+abstract contract Context {
+    function _msgSender() internal view virtual returns (address) {
+        return msg.sender;
+    }
+
+    function _msgData() internal view virtual returns (bytes calldata) {
+        return msg.data;
+    }
+}
+
+// OpenZeppelin Contracts v4.4.1 (access/Ownable.sol)
+
+pragma solidity ^0.8.0;
 
 /**
  * @dev Contract module which provides a basic access control mechanism, where
@@ -136,8 +158,9 @@ contract CorboPay is Ownable {
      */
     function verifyDraft(uint256 _index) internal {
         approvedDrafts[index].signer = submittedDrafts[_index].signer;
-        approvedDrafts[index].milestonesLeft = submittedDrafts[_index].milestonesAmount;
+        approvedDrafts[index].milestonesAmount = submittedDrafts[_index].milestonesAmount;
         approvedDrafts[index].milestonesCount = submittedDrafts[_index].milestonesCount;
+        approvedDrafts[index].milestonesLeft = submittedDrafts[_index].milestonesCount;
         approvedDrafts[index].totalAmount = submittedDrafts[_index].totalAmount;
         index++;
     }
@@ -192,7 +215,7 @@ contract CorboPay is Ownable {
         require(approvedDrafts[clientIndex].signer == msg.sender);
         
         uint256 count = approvedDrafts[clientIndex].milestonesCount;
-        (bool success, ) = msg.sender.call{value: address(this).balance / liveCount / count}("");
+        (bool success, ) = msg.sender.call{value: approvedDrafts[clientIndex].totalAmount / count}("");
         require(success, "Transfer failed.");
 
         approvedDrafts[clientIndex].milestonesAmount--;
@@ -201,13 +224,25 @@ contract CorboPay is Ownable {
             liveCount--;
         }
     }
-
+    
     /**
-     * @dev 
+     * @dev Approves a draft submitted by a client, use the clients `submittedIndex`
+     * for (`oldIndex`) and their address for (`submitter`). Once called it will be 
+     * verified and indexed in approved drafts.  
      */
     function approveDraft(uint256 oldIndex, address submitter) public onlyOwner {
         require(submittedDrafts[oldIndex].signer == submitter);
         submittedDrafts[oldIndex].signed = true;
         verifyDraft(oldIndex);
+    }
+
+    //Add to or remove from the list of clients.
+    function setClient(address newClient, bool newVal) public onlyOwner {
+        client[newClient] = newVal;
+    }
+
+    //Add to or remove from the list of approved clients.
+    function approveClient(address newClient, bool newVal) public onlyOwner {
+        approvedClient[newClient] = newVal;
     }
 }
