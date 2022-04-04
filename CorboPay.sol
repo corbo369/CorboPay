@@ -100,6 +100,7 @@ contract CorboPay is Ownable {
         address signer;
         uint256 milestonesAmount;
         uint256 milestonesCount;
+        uint256 milestonesLeft;
         uint256 totalAmount;
     }
     
@@ -135,7 +136,7 @@ contract CorboPay is Ownable {
      */
     function verifyDraft(uint256 _index) internal {
         approvedDrafts[index].signer = submittedDrafts[_index].signer;
-        approvedDrafts[index].milestonesAmount = submittedDrafts[_index].milestonesAmount;
+        approvedDrafts[index].milestonesLeft = submittedDrafts[_index].milestonesAmount;
         approvedDrafts[index].milestonesCount = submittedDrafts[_index].milestonesCount;
         approvedDrafts[index].totalAmount = submittedDrafts[_index].totalAmount;
         index++;
@@ -189,9 +190,16 @@ contract CorboPay is Ownable {
      */
     function completeMilestone(uint256 clientIndex) public payable onlyApproved {
         require(approvedDrafts[clientIndex].signer == msg.sender);
+        
         uint256 count = approvedDrafts[clientIndex].milestonesCount;
         (bool success, ) = msg.sender.call{value: address(this).balance / liveCount / count}("");
         require(success, "Transfer failed.");
+
+        approvedDrafts[clientIndex].milestonesAmount--;
+        if (approvedDrafts[clientIndex].milestonesAmount == 0) {
+            approvedDrafts[clientIndex].complete = true;
+            liveCount--;
+        }
     }
 
     /**
@@ -201,13 +209,5 @@ contract CorboPay is Ownable {
         require(submittedDrafts[oldIndex].signer == submitter);
         submittedDrafts[oldIndex].signed = true;
         verifyDraft(oldIndex);
-    }
-    
-    /**
-     * @dev 
-     */
-    function completeDraft(uint256 clientIndex) public onlyOwner {
-        approvedDrafts[clientIndex].complete = true;
-        liveCount--;
     }
 }
